@@ -33,7 +33,10 @@ func New(ctx context.Context, bucketNames []string) (source.Source, error) {
 
 	for _, name := range bucketNames {
 		if v := os.Getenv(fmt.Sprintf("GCS_BUCKET_%s", strings.ToUpper(name))); v == "" {
-			return nil, failure.Wrap(errors.New("GCS env missing"), failure.Context{"bucket": name})
+			return nil, failure.Wrap(errors.New("GCS bucket env missing"), failure.Context{"bucket": name})
+		}
+		if v := os.Getenv(); v == "" {
+			return nil, failure.Wrap(errors.New("GCS bucket size env missing"), failure.Context{"bucket": name})
 		}
 	}
 
@@ -52,4 +55,13 @@ func (s *gcsSource) Random(ctx context.Context) (io.ReadCloser, error) {
 
 func (s *gcsSource) cacheObjects(ctx context.Context) error {
 
+}
+
+func bucketSize(name string) int {
+	s := fmt.Sprintf("GCS_BUCKET_SIZE_%s", strings.ToUpper(name))
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		panic(fmt.Sprintf("invalid bucket size passed"))
+	}
+	return n
 }
