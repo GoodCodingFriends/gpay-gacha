@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/GoodCodingFriends/gpay-gacha/source"
 	"github.com/morikuni/failure"
+	"google.golang.org/api/iterator"
 )
 
 func init() {
@@ -32,10 +32,7 @@ func New(ctx context.Context, bucketNames []string) (source.Source, error) {
 	}
 
 	for _, name := range bucketNames {
-		if v := os.Getenv(fmt.Sprintf("GCS_BUCKET_%s", strings.ToUpper(name))); v == "" {
-			return nil, failure.Wrap(errors.New("GCS bucket env missing"), failure.Context{"bucket": name})
-		}
-		if v := os.Getenv(); v == "" {
+		if _, err := bucketSize(name); err != nil {
 			return nil, failure.Wrap(errors.New("GCS bucket size env missing"), failure.Context{"bucket": name})
 		}
 	}
@@ -44,24 +41,36 @@ func New(ctx context.Context, bucketNames []string) (source.Source, error) {
 }
 
 func (s *gcsSource) Random(ctx context.Context) (io.ReadCloser, error) {
-	bktName := s.bucketNames[rand.Int31n(len(s.bucketNames))]
+	bktName := s.bucketNames[rand.Int31n(int32(len(s.bucketNames)))]
 	bkt := s.c.Bucket(bktName)
-	n, err := strconv.Atoi(os.Getenv(fmt.Sprintf("GCS_BUCKET_%s", strings.ToUpper(bktName))))
+	n, err := bucketSize(bktName)
 	if err != nil {
 		return nil, failure.Wrap(err)
 	}
-	bkt.Object()
+	iter := bkt.Objects(ctx, nil)
+	var (
+		i   int
+		obj *storage.ObjectAttrs
+	)
+	for {
+		obj, err = iter.Next()
+		if err == iterator.Done {
+			return nil, failure.Wrap(err, failure.Message("unexpected iterator.Done"))
+		}
+		if i == n {
+			break
+		}
+		i++
+	}
+
+	return bkt.Object(obj.Name).NewReader(ctx)
 }
 
-func (s *gcsSource) cacheObjects(ctx context.Context) error {
-
-}
-
-func bucketSize(name string) int {
+func bucketSize(name string) (int, error) {
 	s := fmt.Sprintf("GCS_BUCKET_SIZE_%s", strings.ToUpper(name))
 	n, err := strconv.Atoi(s)
 	if err != nil {
-		panic(fmt.Sprintf("invalid bucket size passed"))
+		return 0, failure.Wrap(err)
 	}
-	return n
+	return n, nil
 }

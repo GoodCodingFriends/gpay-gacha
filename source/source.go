@@ -1,9 +1,12 @@
 package source
 
-import "io"
+import (
+	"context"
+	"io"
+)
 
 // Source represents image source.
 type Source interface {
 	// Random returns an image handle randomly choiced.
-	Random() (io.ReadCloser, error)
+	Random(ctx context.Context) (io.ReadCloser, error)
 }
